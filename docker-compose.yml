@@ -1,3 +1,5 @@
+name: electrs
+
 services:
   electrs:
     restart: unless-stopped
