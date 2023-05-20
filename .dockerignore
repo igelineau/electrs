@@ -9,3 +9,5 @@ examples
 scripts
 target
 tests
+bin
+*.fish

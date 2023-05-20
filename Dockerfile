@@ -21,4 +21,9 @@ FROM base as result
 # Copy the binaries
 COPY --from=electrs-build /root/.cargo/bin/electrs /usr/bin/electrs
 
-WORKDIR /
+WORKDIR /home/user
+
+ENV ELECTRS_LOG_FILTERS=INFO
+
+ENTRYPOINT ["/usr/bin/electrs"]
+CMD ["--cookie-file", "/home/user/.bitcoin/.cookie"]

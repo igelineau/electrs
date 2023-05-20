@@ -1,0 +1,13 @@
+services:
+  electrs:
+    restart: unless-stopped
+    container_name: electrs
+    build:
+      context: .
+    volumes:
+      - $HOME/.bitcoin:/home/user/.bitcoin:ro
+      - ./db:/home/user/db
+    environment:
+      - "ELECTRS_DB_DIR=/home/user/db"
+    user: '1000:1000'
+    network_mode: host
