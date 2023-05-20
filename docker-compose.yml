@@ -1,6 +1,7 @@
 services:
   electrs:
     restart: unless-stopped
+    stop_grace_period: 6m
     container_name: electrs
     build:
       context: .
