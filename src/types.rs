@@ -4,10 +4,11 @@ use std::convert::TryFrom;
 
 use bitcoin::blockdata::block::Header as BlockHeader;
 use bitcoin::{
-    consensus::encode::{deserialize, serialize, Decodable, Encodable},
+    consensus::encode::{deserialize, Decodable, Encodable},
     hashes::{hash_newtype, sha256, Hash},
     OutPoint, Script, Txid,
 };
+use bitcoin_slices::bsl;
 
 use crate::db;
 
@@ -39,9 +40,11 @@ macro_rules! impl_consensus_encoding {
 }
 
 const HASH_PREFIX_LEN: usize = 8;
+const HEIGHT_SIZE: usize = 4;
 
 type HashPrefix = [u8; HASH_PREFIX_LEN];
 type Height = u32;
+pub(crate) type SerBlock = Vec<u8>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) struct HashPrefixRow {
@@ -49,9 +52,16 @@ pub(crate) struct HashPrefixRow {
     height: Height, // transaction confirmed height
 }
 
+const HASH_PREFIX_ROW_SIZE: usize = HASH_PREFIX_LEN + HEIGHT_SIZE;
+
 impl HashPrefixRow {
     pub(crate) fn to_db_row(&self) -> db::Row {
-        serialize(self).into_boxed_slice()
+        let mut vec = Vec::with_capacity(HASH_PREFIX_ROW_SIZE);
+        let len = self
+            .consensus_encode(&mut vec)
+            .expect("in-memory writers don't error");
+        debug_assert_eq!(len, HASH_PREFIX_ROW_SIZE);
+        vec.into_boxed_slice()
     }
 
     pub(crate) fn from_db_row(row: &[u8]) -> Self {
@@ -159,6 +169,8 @@ pub(crate) struct HeaderRow {
     pub(crate) header: BlockHeader,
 }
 
+const HEADER_ROW_SIZE: usize = 80;
+
 impl_consensus_encoding!(HeaderRow, header);
 
 impl HeaderRow {
@@ -167,12 +179,21 @@ impl HeaderRow {
     }
 
     pub(crate) fn to_db_row(&self) -> db::Row {
-        serialize(self).into_boxed_slice()
+        let mut vec = Vec::with_capacity(HEADER_ROW_SIZE);
+        let len = self
+            .consensus_encode(&mut vec)
+            .expect("in-memory writers don't error");
+        debug_assert_eq!(len, HEADER_ROW_SIZE);
+        vec.into_boxed_slice()
     }
 
     pub(crate) fn from_db_row(row: &[u8]) -> Self {
         deserialize(row).expect("bad HeaderRow")
     }
+}
+
+pub(crate) fn bsl_txid(tx: &bsl::Transaction) -> Txid {
+    bitcoin::Txid::from_slice(tx.txid_sha2().as_slice()).expect("invalid txid")
 }
 
 #[cfg(test)]
@@ -187,7 +208,7 @@ mod tests {
     #[test]
     fn test_scripthash_serde() {
         let hex = "\"4b3d912c1523ece4615e91bf0d27381ca72169dbf6b1c2ffcc9f92381d4984a3\"";
-        let scripthash: ScriptHash = from_str(&hex).unwrap();
+        let scripthash: ScriptHash = from_str(hex).unwrap();
         assert_eq!(format!("\"{}\"", scripthash), hex);
         assert_eq!(json!(scripthash).to_string(), hex);
     }
@@ -195,7 +216,7 @@ mod tests {
     #[test]
     fn test_scripthash_row() {
         let hex = "\"4b3d912c1523ece4615e91bf0d27381ca72169dbf6b1c2ffcc9f92381d4984a3\"";
-        let scripthash: ScriptHash = from_str(&hex).unwrap();
+        let scripthash: ScriptHash = from_str(hex).unwrap();
         let row1 = ScriptHashRow::row(scripthash, 123456);
         let db_row = row1.to_db_row();
         assert_eq!(&*db_row, &hex!("a384491d38929fcc40e20100"));
